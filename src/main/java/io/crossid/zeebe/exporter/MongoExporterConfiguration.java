@@ -6,7 +6,7 @@ import io.camunda.zeebe.protocol.record.ValueType;
 
 public class MongoExporterConfiguration {
     // mongo url
-    public String url = "http://localhost:27017";
+    public String url = "http://mongodb:27017";
     public String dbName = "zeebe";
 
     public ColConfiguration col = new ColConfiguration();

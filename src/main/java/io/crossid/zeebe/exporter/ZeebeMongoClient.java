@@ -126,7 +126,7 @@ public class ZeebeMongoClient {
                     var collection = db.getCollection(collectionName);
                     var bulkWriteResult = collection.bulkWrite(operationsPerCollection);
                     operationsPerCollection.clear();
-                    log.debug("Flushed to collection {}, {} inserted, {} updated", collectionName, bulkWriteResult.getUpserts().size(), bulkWriteResult.getModifiedCount());
+                    log.info("Flushed to collection {}, {} inserted, {} updated", collectionName, bulkWriteResult.getUpserts().size(), bulkWriteResult.getModifiedCount());
                 }
                 catch (Exception e) {
                     log.warn(

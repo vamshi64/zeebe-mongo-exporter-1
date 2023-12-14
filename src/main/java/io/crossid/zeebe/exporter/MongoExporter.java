@@ -40,7 +40,10 @@ public class MongoExporter implements Exporter {
     @Override
     public void open(Controller controller) {
         this.controller = controller;
+
+        log.debug("starting to create client");
         client = createClient();
+        log.debug("client created");
 
         scheduleDelayedFlush();
         log.info("Exporter opened");
@@ -67,9 +70,10 @@ public class MongoExporter implements Exporter {
     @Override
     public void export(final Record record) {
         if (!colsCreated) {
+            log.info("starting to create columns");
             createCols();
         }
-
+        log.info("About to insert record with recordType: {}, Intent: {}, record: {}", record.getRecordType(), record.getIntent(), record);
         client.insert(record);
         lastPosition = record.getPosition();
 
@@ -162,6 +166,7 @@ public class MongoExporter implements Exporter {
     }
 
     private void createValueCol(final ValueType valueType) {
+       log.info("createcolumns initiated for :{}",valueType.name());
         if (!client.createCollection(valueType)) {
             log.warn("Put index template for value type {} was not acknowledged", valueType);
         }
