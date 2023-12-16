@@ -1,7 +1,6 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
-import io.crossid.zeebe.exporter.MongoExporterConfiguration.ColConfiguration;
-import  io.camunda.zeebe.exporter.api.Exporter;;
+import  io.camunda.zeebe.exporter.api.Exporter;
 import io.camunda.zeebe.exporter.api.ExporterException;
 import io.camunda.zeebe.exporter.api.context.Context;
 import io.camunda.zeebe.exporter.api.context.Controller;
@@ -73,7 +72,10 @@ public class MongoExporter implements Exporter {
             log.info("starting to create columns");
             createCols();
         }
-        log.info("About to insert record with recordType: {}, Intent: {}, record: {}", record.getRecordType(), record.getIntent(), record);
+       // Field[] fields = Record.class.getFields();
+
+        //record.
+        log.info("Mongo record with recordType: {}, Intent: {}, Value: {}, record: {}, ", record.getRecordType(), record.getIntent(), record.getValue(), record);
         client.insert(record);
         lastPosition = record.getPosition();
 
@@ -121,7 +123,7 @@ public class MongoExporter implements Exporter {
     }
 
     private void createCols() {
-        final ColConfiguration col = configuration.col;
+        final MongoExporterConfiguration.ColConfiguration col = configuration.col;
 
         if (col.createCollections) {
             if (col.deployment) {

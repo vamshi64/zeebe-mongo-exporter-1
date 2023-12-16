@@ -4,19 +4,19 @@
 
     <modelVersion>4.0.0</modelVersion>
     <name>Zeebe Mongo Exporter</name>
-    <groupId>io.crossid</groupId>
-    <artifactId>zeebe-mongo-exporter</artifactId>
+    <groupId>com.optum.flow</groupId>
+    <artifactId>optima-flow-app-8-mongo-exporter</artifactId>
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <mongodb-driver-sync.version>4.1.0</mongodb-driver-sync.version>
-        <version.log4j>2.13.3</version.log4j>
+        <mongodb-driver-sync.version>4.11.0</mongodb-driver-sync.version>
+        <version.log4j>2.22.0</version.log4j>
 
 
-        <zeebe.version>1.1.3</zeebe.version>
+        <zeebe.version>8.3.0</zeebe.version>
         <zb-test-utils.version>0.16.4</zb-test-utils.version>
         <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -24,6 +24,84 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.camunda</groupId>
+            <artifactId>zeebe-exporter-api</artifactId>
+            <version>8.3.0-alpha6</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.camunda</groupId>
+            <artifactId>zeebe-protocol</artifactId>
+            <version>8.3.0-alpha6</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>elasticsearch-rest-client</artifactId>
+            <version>8.7.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpasyncclient</artifactId>
+            <version>4.1.5</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.14</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore-nio</artifactId>
+            <version>4.4.16</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <version>4.4.16</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>0.16.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.camunda</groupId>
+            <artifactId>zeebe-util</artifactId>
+            <version>8.3.0-alpha6</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.15.2</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.15.2</version>
+            <scope>compile</scope>
+        </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
@@ -35,14 +113,6 @@
             <artifactId>mongodb-driver-sync</artifactId>
             <version>${mongodb-driver-sync.version}</version>
         </dependency>
-
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>zeebe-exporter-api</artifactId>
-            <version>${zeebe.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- test -->
         <dependency>
             <groupId>junit</groupId>
@@ -57,46 +127,29 @@
             <version>3.16.1</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
-            <version>${version.log4j}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <version>${version.log4j}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>zeebe-test</artifactId>
-            <version>${zeebe.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>zeebe-client-java</artifactId>
-            <version>${zeebe.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <version>1.16.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>3.12.4</version>
-            <scope>test</scope>
-        </dependency>
-
+        <!--        <dependency>-->
+<!--            <groupId>org.slf4j</groupId>-->
+<!--            <artifactId>slf4j-api</artifactId>-->
+<!--            <version>2.0.7</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>io.prometheus</groupId>-->
+<!--            <artifactId>simpleclient</artifactId>-->
+<!--            <version>0.16.0</version>-->
+<!--            <scope>compile</scope>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>org.mockito</groupId>-->
+<!--            <artifactId>mockito-core</artifactId>-->
+<!--            <version>3.12.4</version>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>org.testcontainers</groupId>-->
+<!--            <artifactId>testcontainers</artifactId>-->
+<!--            <version>1.16.0</version>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>

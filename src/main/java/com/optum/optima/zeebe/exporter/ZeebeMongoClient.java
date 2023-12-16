@@ -1,4 +1,4 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
 import com.google.gson.Gson;
 import com.mongodb.client.MongoClient;
@@ -7,7 +7,7 @@ import com.mongodb.client.model.*;
 import com.mongodb.client.model.UpdateOneModel;
 import io.camunda.zeebe.protocol.record.Record;
 import io.camunda.zeebe.protocol.record.value.*;
-import io.camunda.zeebe.protocol.record.value.deployment.Process;
+import io.camunda.zeebe.protocol.record.value.deployment.DecisionRecordValue;
 import io.camunda.zeebe.protocol.record.value.deployment.DeploymentResource;
 import io.camunda.zeebe.protocol.record.value.deployment.ProcessMetadataValue;
 import org.bson.Document;
@@ -35,7 +35,7 @@ public class ZeebeMongoClient {
     private final List<Tuple<String, UpdateOneModel<Document>>> bulkOperations;
     private final MongoExporterConfiguration configuration;
     private final MongoClient client;
-    public static final String COL_DELIMITER = "_";
+    public static final String COL_DELIMITER = "-";
 
     public ZeebeMongoClient(
             final MongoExporterConfiguration configuration, final Logger log) {
@@ -371,22 +371,27 @@ public class ZeebeMongoClient {
     }
 
     private List<Tuple<String, UpdateOneModel<Document>>> handleDeploymentEvent(final Record<?> record) {
-        if (!record.getIntent().name().equals("DISTRIBUTED")) {
-            return null;
+        if (record.getIntent().name().equals("CREATED")) {
+
+            var castRecord = (DeploymentRecordValue) record.getValue();
+
+            var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+            var timestamp = new Date(record.getTimestamp());
+            var resources = castRecord.getResources();
+
+            for (var workflow : castRecord.getProcessesMetadata()) {
+                var resource = resources.stream().filter(r -> r.getResourceName().equals(workflow.getResourceName())).iterator().next();
+                result.add(new Tuple<>(getCollectionName("process"), workflowReplaceCommand(workflow, resource, timestamp)));
+            }
+
+            for (var decision : castRecord.getDecisionsMetadata()) {
+                var resource = resources.stream().filter(r -> r.getResourceName().equals(decision.getDecisionName())).iterator().next();
+                result.add(new Tuple<>(getCollectionName("decision"), decisionReplaceCommand(decision, resource, timestamp)));
+            }
+
+            return result;
         }
-
-        var castRecord = (DeploymentRecordValue) record.getValue();
-
-        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
-        var timestamp = new Date(record.getTimestamp());
-        var resources = castRecord.getResources();
-
-        for (var workflow : castRecord.getProcessesMetadata()) {
-            var resource = resources.stream().filter(r -> r.getResourceName().equals(workflow.getResourceName())).iterator().next();
-            result.add(new Tuple<>(getCollectionName("flow"), workflowReplaceCommand(workflow, resource, timestamp)));
-        }
-
-        return result;
+        return null;
     }
 
     private UpdateOneModel<Document> workflowReplaceCommand(ProcessMetadataValue record, DeploymentResource resource, Date timestamp) {
@@ -399,6 +404,25 @@ public class ZeebeMongoClient {
 
         return new UpdateOneModel<>(
                 new Document("_id", record.getProcessDefinitionKey()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true)
+        );
+    }
+
+    private UpdateOneModel<Document> decisionReplaceCommand(DecisionRecordValue record, DeploymentResource resource, Date timestamp) {
+        var document = new Document("_id", record.getDecisionKey())
+                .append("decisionId", record.getDecisionId())
+                .append("decisionName", record.getDecisionName())
+                .append("decisionKey", record.getDecisionKey())
+                .append("decisionRequirementsId", record.getDecisionRequirementsId())
+                .append("decisionRequirementsKey", record.getDecisionRequirementsKey())
+                .append("tenantId", record.getTenantId())
+                .append("version", record.getVersion())
+                .append("timestamp", timestamp)
+                .append("resource", resource.getResource());
+
+        return new UpdateOneModel<>(
+                new Document("_id", record.getDecisionKey()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
         );
