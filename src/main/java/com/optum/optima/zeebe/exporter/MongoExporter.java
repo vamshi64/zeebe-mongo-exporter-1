@@ -1,6 +1,6 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
-import io.crossid.zeebe.exporter.MongoExporterConfiguration.ColConfiguration;
+import com.optum.optima.zeebe.exporter.MongoExporterConfiguration.ColConfiguration;
 import  io.camunda.zeebe.exporter.api.Exporter;;
 import io.camunda.zeebe.exporter.api.ExporterException;
 import io.camunda.zeebe.exporter.api.context.Context;
@@ -68,12 +68,12 @@ public class MongoExporter implements Exporter {
     }
 
     @Override
-    public void export(final Record record) {
+    public void export(Record<?> record) {
         if (!colsCreated) {
             log.info("starting to create columns");
             createCols();
         }
-        log.info("About to insert record with recordType: {}, Intent: {}, record: {}", record.getRecordType(), record.getIntent(), record);
+        log.info("About to insert record with recordType: {}, Intent: {}, ValueType:{}, record: {}", record.getRecordType(), record.getIntent(), record.getValueType(), record);
         client.insert(record);
         lastPosition = record.getPosition();
 

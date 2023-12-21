@@ -1,4 +1,4 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
 import com.google.gson.Gson;
 import com.mongodb.client.MongoClient;
@@ -7,7 +7,7 @@ import com.mongodb.client.model.*;
 import com.mongodb.client.model.UpdateOneModel;
 import io.camunda.zeebe.protocol.record.Record;
 import io.camunda.zeebe.protocol.record.value.*;
-import io.camunda.zeebe.protocol.record.value.deployment.Process;
+import io.camunda.zeebe.protocol.record.value.deployment.DecisionRecordValue;
 import io.camunda.zeebe.protocol.record.value.deployment.DeploymentResource;
 import io.camunda.zeebe.protocol.record.value.deployment.ProcessMetadataValue;
 import org.bson.Document;
@@ -31,11 +31,11 @@ class Tuple<X, Y> {
 
 public class ZeebeMongoClient {
     private final Logger log;
-//    private final DateTimeFormatter formatter;
+    //    private final DateTimeFormatter formatter;
     private final List<Tuple<String, UpdateOneModel<Document>>> bulkOperations;
     private final MongoExporterConfiguration configuration;
     private final MongoClient client;
-    public static final String COL_DELIMITER = "_";
+    public static final String COL_DELIMITER = "-";
 
     public ZeebeMongoClient(
             final MongoExporterConfiguration configuration, final Logger log) {
@@ -78,7 +78,7 @@ public class ZeebeMongoClient {
      * @throws MongoExporterException if not all items of the bulk were flushed successfully
      */
     public void flush() {
-       if (bulkOperations.isEmpty()) {
+        if (bulkOperations.isEmpty()) {
             return;
         }
 
@@ -197,13 +197,134 @@ public class ZeebeMongoClient {
             case TIMER: return handleTimerEvent(record);
             case MESSAGE_START_EVENT_SUBSCRIPTION: return handleMessageSubscriptionStartEvent(record);
             case VARIABLE: return handleVariableEvent(record);
-//            case JOB_BATCH: return jobReplaceCommand(record);
-//            case VARIABLE_DOCUMENT: return jobReplaceCommand(record);
-//            case WORKFLOW_INSTANCE_CREATION: return jobReplaceCommand(record);
-//            case ERROR: return jobReplaceCommand(record);
-//            case WORKFLOW_INSTANCE_RESULT: return jobReplaceCommand(record);
+            case JOB_BATCH: return jobBatchReplaceCommand(record);
+            case PROCESS_INSTANCE_CREATION: return handleProcessInstanceCreationEvent(record);
+            case ERROR: return handleErrorEvent(record);
+            case VARIABLE_DOCUMENT: return handleVariableDocumentEvent(record);
+            case PROCESS_INSTANCE_RESULT: return handleProcessInstanceResultEvent(record);
+            case DECISION_EVALUATION: return handleDecisionEvaluationEvent(record);
+
             default: return null;
         }
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> handleDecisionEvaluationEvent(Record<?> record) {
+        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+        var castRecord = (DecisionEvaluationRecordValue) record.getValue();
+        var document = new Document("_id", castRecord.getDecisionKey())
+                .append("decisionId", castRecord.getDecisionId())
+                .append("decisionName", castRecord.getDecisionName())
+                .append("decisionKey", castRecord.getDecisionKey())
+                .append("decisionRequirementsId", castRecord.getDecisionRequirementsId())
+                .append("decisionRequirementsKey", castRecord.getDecisionRequirementsKey())
+                .append("tenantId", castRecord.getTenantId())
+                .append("bpmnProcessId", castRecord.getBpmnProcessId())
+                .append("decisionOutput", castRecord.getDecisionOutput())
+                .append("decisionVersion", castRecord.getDecisionVersion())
+                .append("elementId", castRecord.getElementId())
+                .append("elementInstanceKey", castRecord.getElementInstanceKey())
+                .append("evaluatedDecisions", castRecord.getEvaluatedDecisions())
+                .append("evaluationFailureMessage", castRecord.getEvaluationFailureMessage())
+                .append("failedDecisionId", castRecord.getFailedDecisionId())
+                .append("variables", castRecord.getVariables())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey());
+
+        result.add(new Tuple<>( getCollectionName("decision-evaluation"), new UpdateOneModel<>(
+                new Document("_id", castRecord.getProcessInstanceKey()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true))));
+        return result;
+
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> handleProcessInstanceResultEvent(Record<?> record) {
+        if(record.getIntent().name().equals("CREATED")) {
+            var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+            var castRecord = (ProcessInstanceResultRecordValue) record.getValue();
+            var document = new Document()
+                    .append("bpmnProcessId", castRecord.getBpmnProcessId())
+                    .append("version", castRecord.getVersion())
+                    .append("processDefinitionKey", castRecord.getProcessDefinitionKey())
+                    .append("variables", castRecord.getVariables())
+                    .append("processInstanceKey", castRecord.getProcessInstanceKey())
+                    .append("tenantId", castRecord.getTenantId());
+            result.add(new Tuple<>( getCollectionName("process-instance-result"), new UpdateOneModel<>(
+                    new Document("_id", castRecord.getProcessInstanceKey()),
+                    new Document("$set", document),
+                    new UpdateOptions().upsert(true))));
+            return result;
+        }
+        return null;
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> handleVariableDocumentEvent(Record<?> record) {
+        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+        var castRecord = (VariableDocumentRecordValue) record.getValue();
+        var document = new Document()
+                .append("scopeKey", castRecord.getScopeKey())
+                .append("variables", castRecord.getVariables())
+                .append("tenantId", castRecord.getTenantId())
+                .append("updateSemantics", castRecord.getUpdateSemantics());
+        result.add(new Tuple<>( getCollectionName("variable-document"), new UpdateOneModel<>(
+                new Document("_id", record.getPartitionId()+"-"+record.getPosition()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true))));
+        return result;
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> handleErrorEvent(Record<?> record) {
+        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+        var castRecord = (ErrorRecordValue) record.getValue();
+        var document = new Document()
+                .append("errorEventPosition", castRecord.getErrorEventPosition())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
+                .append("stacktrace", castRecord.getStacktrace())
+                .append("exceptionMessage", castRecord.getExceptionMessage());
+        result.add(new Tuple<>( getCollectionName("error"), new UpdateOneModel<>(
+                new Document("_id", record.getPartitionId()+"-"+record.getPosition()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true))));
+        return result;
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> jobBatchReplaceCommand(Record<?> record) {
+        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+        var castRecord = (JobBatchRecordValue) record.getValue();
+        var document = new Document()
+                .append("jobs", castRecord.getJobs())
+                .append("type", castRecord.getType())
+                .append("jobKeys", castRecord.getJobKeys())
+                .append("worker", castRecord.getWorker())
+                .append("timeout", castRecord.getTimeout())
+                .append("maxJobsToActivate", castRecord.getMaxJobsToActivate())
+                .append("tenantIds", castRecord.getTenantIds());
+        result.add(new Tuple<>( getCollectionName("job-batch"), new UpdateOneModel<>(
+                new Document("_id", record.getPartitionId()+"-"+record.getPosition()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true))));
+        return result;
+    }
+
+    private List<Tuple<String, UpdateOneModel<Document>>> handleProcessInstanceCreationEvent(final Record<?> record) {
+        if(record.getIntent().name().equals("CREATED")) {
+            var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+            var castRecord = (ProcessInstanceCreationRecordValue) record.getValue();
+            var document = new Document()
+                    .append("bpmnProcessId", castRecord.getBpmnProcessId())
+                    .append("version", castRecord.getVersion())
+                    .append("processDefinitionKey", castRecord.getProcessDefinitionKey())
+                    .append("processDefinitionKey", castRecord.getProcessDefinitionKey())
+                    .append("variables", castRecord.getVariables())
+                    .append("startInstructions", castRecord.getStartInstructions())
+                    .append("tenantId", castRecord.getTenantId());
+            result.add(new Tuple<>( getCollectionName("process-instance-creation"), new UpdateOneModel<>(
+                    new Document("_id", castRecord.getProcessInstanceKey()),
+                    new Document("$set", document),
+                    new UpdateOptions().upsert(true))));
+                return result;
+        }
+        return null;
+
     }
 
     private Object parseJsonValue(final String value) {
@@ -218,10 +339,10 @@ public class ZeebeMongoClient {
         var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
         var timestamp = new Date(record.getTimestamp());
 
-        var castRecord = (ProcessInstanceRecordValue) record.getValue();
-        if (record.getKey() == castRecord.getProcessInstanceKey()) {
-            result.add(workflowInstanceReplaceCommand(record, timestamp));
-        }
+//        var castRecord = (ProcessInstanceRecordValue) record.getValue();
+//        if (record.getKey() == castRecord.getProcessInstanceKey()) {
+//            result.add(workflowInstanceReplaceCommand(record, timestamp));
+//        }
         result.add(elementInstanceReplaceCommand(record, timestamp));
         result.add(elementInstanceStateTransitionReplaceCommand(record, timestamp));
 
@@ -233,7 +354,7 @@ public class ZeebeMongoClient {
         var document = new Document()
                 .append("bpmnProcessId", castRecord.getBpmnProcessId())
                 .append("version", castRecord.getVersion())
-                .append("workflowKey", castRecord.getProcessDefinitionKey());
+                .append("processDefinitionKey", castRecord.getProcessDefinitionKey());
 
 
         if (castRecord.getParentProcessInstanceKey() > 0) {
@@ -257,7 +378,7 @@ public class ZeebeMongoClient {
                 break;
         }
 
-        return new Tuple<>( getCollectionName("flow_instance"), new UpdateOneModel<>(
+        return new Tuple<>( getCollectionName("flow-instance"), new UpdateOneModel<>(
                 new Document("_id", castRecord.getProcessInstanceKey()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
@@ -271,8 +392,8 @@ public class ZeebeMongoClient {
                 .append("bpmnElementType", castRecord.getBpmnElementType().name())
                 .append("elementId", castRecord.getElementId())
                 .append("state", getElementInstanceState(record))
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
-                .append("workflowKey", castRecord.getProcessDefinitionKey());
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processDefinitionKey", castRecord.getProcessDefinitionKey());
 
         switch (record.getIntent().name()) {
             case "ELEMENT_ACTIVATING":
@@ -287,7 +408,7 @@ public class ZeebeMongoClient {
                 break;
         }
 
-        return new Tuple<>(getCollectionName("element_instance") , new UpdateOneModel<>(
+        return new Tuple<>(getCollectionName("process-instance") , new UpdateOneModel<>(
                 new Document("_id", record.getKey()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
@@ -327,7 +448,7 @@ public class ZeebeMongoClient {
                 .append("timestamp", timestamp);
 
 
-        return new Tuple<>(getCollectionName("element_instance_state_transition") , new UpdateOneModel<>(
+        return new Tuple<>(getCollectionName("element-instance-state-transition") , new UpdateOneModel<>(
                 new Document("_id", record.getPosition()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
@@ -340,7 +461,7 @@ public class ZeebeMongoClient {
 
         var document =  new Document()
                 .append("jobType", castRecord.getType())
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
                 .append("elementInstanceKey", castRecord.getElementInstanceKey())
                 .append("worker", castRecord.getWorker())
                 .append("retries", castRecord.getRetries())
@@ -371,22 +492,39 @@ public class ZeebeMongoClient {
     }
 
     private List<Tuple<String, UpdateOneModel<Document>>> handleDeploymentEvent(final Record<?> record) {
-        if (!record.getIntent().name().equals("DISTRIBUTED")) {
-            return null;
-        }
+            log.info("Received Deployment Event with Intent: {}", record.getIntent().name());
 
-        var castRecord = (DeploymentRecordValue) record.getValue();
+            var castRecord = (DeploymentRecordValue) record.getValue();
 
-        var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
-        var timestamp = new Date(record.getTimestamp());
-        var resources = castRecord.getResources();
+            var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
+            var timestamp = new Date(record.getTimestamp());
+            var resources = castRecord.getResources();
 
-        for (var workflow : castRecord.getProcessesMetadata()) {
-            var resource = resources.stream().filter(r -> r.getResourceName().equals(workflow.getResourceName())).iterator().next();
-            result.add(new Tuple<>(getCollectionName("flow"), workflowReplaceCommand(workflow, resource, timestamp)));
-        }
+            log.info("Deployment Event with Intent: {}, DeploymentRecordValue: {}, PartitionId:{}, Position:{}, SourceRecordPosition:{}",
+                    record.getIntent().name(), castRecord, record.getPartitionId(), record.getPosition(), record.getSourceRecordPosition());
 
-        return result;
+            if(castRecord.getProcessesMetadata().size()>0) {
+                for (var workflow : castRecord.getProcessesMetadata()) {
+                    log.info("Creating record to insert to Process Collection with ResourceName: {}", workflow.getResourceName());
+                    if(!resources.isEmpty()) {
+                        var resource = resources.stream().filter(r -> r.getResourceName().equals(workflow.getResourceName())).iterator().next();
+                        result.add(new Tuple<>(getCollectionName("process"), workflowReplaceCommand(workflow, resource, timestamp)));
+                    }
+                }
+            }else{
+                log.info("Creating record to insert to Process Collection with No ProcessesMetadata");
+
+            }
+
+            for (var decision : castRecord.getDecisionsMetadata()) {
+                log.info("Creating record to insert to Decision Collection with DecisionName: {}", decision.getDecisionName());
+                result.add(new Tuple<>(getCollectionName("decision"), decisionReplaceCommand(decision, timestamp)));
+            }
+
+            return result;
+
+        //log.info("Skipping Deployment Event with Intent: {}", record.getIntent().name());
+        //return null;
     }
 
     private UpdateOneModel<Document> workflowReplaceCommand(ProcessMetadataValue record, DeploymentResource resource, Date timestamp) {
@@ -399,6 +537,24 @@ public class ZeebeMongoClient {
 
         return new UpdateOneModel<>(
                 new Document("_id", record.getProcessDefinitionKey()),
+                new Document("$set", document),
+                new UpdateOptions().upsert(true)
+        );
+    }
+
+    private UpdateOneModel<Document> decisionReplaceCommand(DecisionRecordValue record, Date timestamp) {
+        var document = new Document("_id", record.getDecisionKey())
+                .append("decisionId", record.getDecisionId())
+                .append("decisionName", record.getDecisionName())
+                .append("decisionKey", record.getDecisionKey())
+                .append("decisionRequirementsId", record.getDecisionRequirementsId())
+                .append("decisionRequirementsKey", record.getDecisionRequirementsKey())
+                .append("tenantId", record.getTenantId())
+                .append("version", record.getVersion())
+                .append("timestamp", timestamp);
+
+        return new UpdateOneModel<>(
+                new Document("_id", record.getDecisionKey()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
         );
@@ -417,7 +573,7 @@ public class ZeebeMongoClient {
 
         var document =  new Document()
                 .append("name", castRecord.getName())
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
                 .append("scopeKey", castRecord.getScopeKey())
                 .append("value", parseJsonValue(castRecord.getValue()))
                 .append("timestamp", new Date(record.getTimestamp()));
@@ -436,12 +592,12 @@ public class ZeebeMongoClient {
                 .append("variableKey", record.getKey())
                 .append("name", castRecord.getName())
                 .append("value", parseJsonValue(castRecord.getValue()))
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
                 .append("scopeKey", castRecord.getScopeKey())
                 .append("timestamp", new Date(record.getTimestamp()));
 
 
-        return new Tuple<>(getCollectionName("variable_update"), new UpdateOneModel<>(
+        return new Tuple<>(getCollectionName("variable-update"), new UpdateOneModel<>(
                 new Document("_id", record.getPosition()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
@@ -454,7 +610,7 @@ public class ZeebeMongoClient {
         var document =  new Document()
                 .append("errorType", castRecord.getErrorType().name())
                 .append("errorMessage", castRecord.getErrorMessage())
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
                 .append("elementInstanceKey", castRecord.getElementInstanceKey());
 
         if (castRecord.getJobKey() > 0) {
@@ -496,11 +652,11 @@ public class ZeebeMongoClient {
         // These only need to be set once, on insert
         var setOnInsert = new Document("creationTime", timestamp);
         if (castRecord.getProcessDefinitionKey() > 0) {
-            setOnInsert.append("workflowKey", castRecord.getProcessDefinitionKey());
+            setOnInsert.append("processDefinitionKey", castRecord.getProcessDefinitionKey());
         }
 
         if (castRecord.getProcessInstanceKey() > 0) {
-            setOnInsert.append("workflowInstanceKey", castRecord.getProcessInstanceKey());
+            setOnInsert.append("processInstanceKey", castRecord.getProcessInstanceKey());
         }
 
         if (castRecord.getElementInstanceKey() > 0) {
@@ -546,7 +702,7 @@ public class ZeebeMongoClient {
         var document =  new Document()
                 .append("messageName", castRecord.getMessageName())
                 .append("correlationKey", castRecord.getCorrelationKey())
-                .append("workflowInstanceKey", castRecord.getProcessInstanceKey())
+                .append("processInstanceKey", castRecord.getProcessInstanceKey())
                 .append("elementInstanceKey", castRecord.getElementInstanceKey())
                 .append("timestamp", new Date(record.getTimestamp()))
                 .append("state", record.getIntent().name());
@@ -567,14 +723,14 @@ public class ZeebeMongoClient {
         // TODO: _id possibly isn't unique, using (messageName, WorkflowKey) as identifier for upsert
         var document =  new Document("_id", record.getPosition())
                 .append("messageName", castRecord.getMessageName())
-                .append("WorkflowKey", castRecord.getProcessDefinitionKey())
+                .append("processDefinitionKey", castRecord.getProcessDefinitionKey())
                 .append("elementId", castRecord.getStartEventId())
                 .append("timestamp", new Date(record.getTimestamp()))
                 .append("state", record.getIntent().name());
 
         var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
-        result.add(new Tuple<>(getCollectionName("message_subscription"), new UpdateOneModel<>(
-                new Document("messageName", castRecord.getMessageName()).append("WorkflowKey", castRecord.getProcessDefinitionKey()),
+        result.add(new Tuple<>(getCollectionName("message-subscription"), new UpdateOneModel<>(
+                new Document("messageName", castRecord.getMessageName()).append("processDefinitionKey", castRecord.getProcessDefinitionKey()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)
         )));
@@ -596,7 +752,7 @@ public class ZeebeMongoClient {
                 .append("timestamp", new Date(record.getTimestamp()));
 
         var result = new ArrayList<Tuple<String, UpdateOneModel<Document>>>();
-        result.add(new Tuple<>(getCollectionName("message_correlation"), new UpdateOneModel<>(
+        result.add(new Tuple<>(getCollectionName("message-correlation"), new UpdateOneModel<>(
                 new Document("_id", record.getPosition()),
                 new Document("$set", document),
                 new UpdateOptions().upsert(true)

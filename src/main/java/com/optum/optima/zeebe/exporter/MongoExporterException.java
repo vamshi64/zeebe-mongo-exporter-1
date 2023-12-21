@@ -1,4 +1,4 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
 public class MongoExporterException extends RuntimeException {
 

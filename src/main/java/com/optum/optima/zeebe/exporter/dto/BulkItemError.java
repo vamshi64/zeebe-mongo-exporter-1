@@ -1,4 +1,4 @@
-package io.crossid.zeebe.exporter.dto;
+package com.optum.optima.zeebe.exporter.dto;
 
 public final class BulkItemError {
 

@@ -4,8 +4,8 @@
 
     <modelVersion>4.0.0</modelVersion>
     <name>Zeebe Mongo Exporter</name>
-    <groupId>io.crossid</groupId>
-    <artifactId>zeebe-mongo-exporter</artifactId>
+    <groupId>com.optum.flow</groupId>
+    <artifactId>optima-flow-app-8-mongo-exporter</artifactId>
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
 
@@ -16,11 +16,11 @@
         <version.log4j>2.13.3</version.log4j>
 
 
-        <zeebe.version>1.1.3</zeebe.version>
+        <zeebe.version>8.3.0-alpha6</zeebe.version>
         <zb-test-utils.version>0.16.4</zb-test-utils.version>
         <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
     </properties>
 
     <dependencies>
@@ -43,6 +43,12 @@
             <scope>provided</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.camunda</groupId>
+            <artifactId>zeebe-protocol</artifactId>
+            <version>${zeebe.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <!-- test -->
         <dependency>
             <groupId>junit</groupId>
@@ -71,34 +77,7 @@
             <version>${version.log4j}</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>zeebe-test</artifactId>
-            <version>${zeebe.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>zeebe-client-java</artifactId>
-            <version>${zeebe.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <version>1.16.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>3.12.4</version>
-            <scope>test</scope>
-        </dependency>
-
     </dependencies>
-
     <build>
         <plugins>
             <plugin>
@@ -109,6 +88,15 @@
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
+                    <dependencySets>
+                        <dependencySet>
+                            <excludes>
+                                <!-- Exclude the specific dependency -->
+                                <exclude>io.camunda:zeebe-exporter-api</exclude>
+                            </excludes>
+                            <outputDirectory>/lib</outputDirectory>
+                        </dependencySet>
+                    </dependencySets>
                     <outputDirectory>${project.build.directory}</outputDirectory>
                 </configuration>
                 <executions>

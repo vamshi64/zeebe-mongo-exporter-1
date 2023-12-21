@@ -1,4 +1,4 @@
-package io.crossid.zeebe.exporter;
+package com.optum.optima.zeebe.exporter;
 
 import io.camunda.zeebe.protocol.record.Record;
 import io.camunda.zeebe.protocol.record.RecordType;

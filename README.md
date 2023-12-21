@@ -58,7 +58,7 @@ Here is a complete, default configuration example:
       # An example configuration for the mongo exporter:
       #
 
-      className: io.crossid.zeebe.exporter.MongoExporter
+      className: com.optum.optima.zeebe.exporter.MongoExporter
       jarPath: exporters/zeebe-mongo-exporter.jar
 
       args:
